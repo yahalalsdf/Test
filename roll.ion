@@ -1,0 +1,122 @@
+#include <SoftwareSerial.h>
+#include <ESP8266WiFi.h>
+
+#define HumanSensor1 16 //휴지곽 사람손 인식
+#define HumanSensor2 5 //화장실칸 사람 인식
+
+#define TRIG 12 //초음파 센서
+#define ECHO 14
+
+#define motor1 13 //DC모터 방향 제어
+#define motor2 15
+
+const char* ssid = "IT 404";
+const char* password = "bitc5600";
+WiFiServer server(80);
+
+long duration;
+boolean pastHs1,Hs1,pastHs2,Hs2;
+String hs2="2LOW",rollAmount,totalData,iP;
+int count;
+
+void setup()
+{
+  Serial.begin(115200);//시리얼 통신 초기화
+  pinMode(HumanSensor1,INPUT);   //인체감지센서1
+  pinMode(HumanSensor2,INPUT);   //인체감지센서2
+  
+  pinMode(TRIG,OUTPUT);
+  pinMode(ECHO,INPUT);
+  
+  pinMode(motor1, OUTPUT); //DC모터 방향 제어
+  pinMode(motor2, OUTPUT); //DC모터 방향 제어
+
+  WiFi.begin(ssid, password); //와이파이 데이터전송
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+  }
+  server.begin();
+  Serial.print(WiFi.localIP());
+}
+ 
+ 
+void loop()
+{
+  Hs1=digitalRead(HumanSensor1);
+  Hs2=digitalRead(HumanSensor2);
+  if(pastHs1==LOW&&Hs1==HIGH){
+    digitalWrite(motor1,LOW);
+    digitalWrite(motor2,HIGH);
+    delay(1000);
+    digitalWrite(motor1,LOW);
+    digitalWrite(motor2,LOW);
+    pastHs1=HIGH;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+  }
+  else if(pastHs1==HIGH&&Hs1==LOW){
+    pastHs1=LOW;
+  }
+  switch(count){
+    case 0:
+      if(Hs2==HIGH){
+        count=1;
+        hs2="2HIGH";
+      }
+      break;
+    case 1:
+      if(Hs2==LOW){
+        count=2;
+      }
+      break;
+    case 2:
+      if(Hs2==HIGH){
+        count=3;
+        hs2="2LOW";
+      }
+      break;
+    case 3:
+      if(Hs2==LOW){
+        count=0;
+      }
+      break;
+    defalut:
+      hs2="2LOW";
+  }
+    
+  digitalWrite(TRIG,LOW);
+  delayMicroseconds(10);
+  digitalWrite(TRIG,HIGH); 
+  delayMicroseconds(15);
+  digitalWrite(TRIG,LOW);
+
+  duration = pulseIn(ECHO,HIGH);
+  if(duration>=400&&duration<=600){
+    rollAmount=String(100-(600-duration)/2);
+  }
+
+  //totalData = '!'+rollAmount+"#"+hs2;
+  Serial.println("!"+rollAmount+"#"+hs2);
+  
+  WiFiClient client = server.available();
+  if (!client)
+  {
+    return;
+  }
+  while(!client.available())
+  {
+    delay(1);
+  }
+  String request = client.readStringUntil('\r');
+  client.flush();
+
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: text/html");
+  client.println(""); //  do not forget this one
+  client.println("<!DOCTYPE HTML>");
+  client.println("<html>");
+
+  client.print("Tissue amount : "+rollAmount+"%  ,  Human use : "+hs2);
+
+  delay(100);
+
+}
